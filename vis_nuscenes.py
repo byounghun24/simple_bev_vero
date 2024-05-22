@@ -70,7 +70,7 @@ def rgba2rgb( rgba, background=(255,255,255) ):
 
     return np.asarray( rgb, dtype='uint8' )
 
-def run_model(loader, index, model, d, img_dir, device='cuda:0', sw=None):
+def run_model(loader, index, model, d, img_dir, device='cuda:0', sw=None, tv=None):
     imgs_all, rots_all, trans_all, intrins_all, pts0_all, extra0_all, pts_all, extra_all, lrtlist_velo_all, vislist_all, tidlist_all, scorelist_all, seg_bev_g_all, valid_bev_g_all, center_bev_g_all, offset_bev_g_all, radar_data_all, egopose_all = d
 
     T = imgs_all.shape[1]
@@ -243,7 +243,7 @@ def run_model(loader, index, model, d, img_dir, device='cuda:0', sw=None):
         seg_e_t_onmap = map_vis * (1-seg_e_t) + blue_img * seg_e_t
 
         # save to folder
-        folder_name = os.path.join(img_dir, "sample_vis_%03d" % index)
+        folder_name = os.path.join(img_dir, "sample_vis_" + tv + "_%03d" % index)
         os.makedirs(folder_name, exist_ok=True)
 
         seg_g_t_vis = utils.improc.back2color(seg_g_t_onmap).cpu().numpy()[0].transpose(1,2,0)
@@ -337,7 +337,7 @@ def main(
         'ncams': ncams,
     }
 
-    _, dataloader = nuscenesdataset.compile_data(
+    dataloader_t, dataloader_v = nuscenesdataset.compile_data(
         dset,
         data_dir,
         data_aug_conf=data_aug_conf,
@@ -353,8 +353,10 @@ def main(
         do_shuffle_cams=False,
         get_tids=True,
     )
-    dataloader.dataset.data_root = os.path.join(data_dir, dset)
-    iterloader = iter(dataloader)
+    dataloader = (dataloader_v, dataloader_t)
+    dataloader[0].dataset.data_root = os.path.join(data_dir, dset)
+    dataloader[1].dataset.data_root = os.path.join(data_dir, dset)
+    iterloader = (iter(dataloader[0]), iter(dataloader[1]))
 
     # set up model & seg loss
     model = Segnet(Z, Y, X, use_radar=use_radar, use_lidar=use_lidar, use_metaradar=use_metaradar, do_rgbcompress=do_rgbcompress, encoder_type=encoder_type, rand_flip=False)
@@ -372,36 +374,41 @@ def main(
     requires_grad(parameters, False)
     model.eval()
 
-    while global_step < max_iters:
-        global_step += 1
+    for i in range(len(iterloader)):
+        while global_step < max_iters:
+            global_step += 1
 
-        read_start_time = time.time()
+            read_start_time = time.time()
 
-        sw = utils.improc.Summ_writer(
-            writer=writer,
-            global_step=global_step,
-            log_freq=log_freq,
-            fps=2,
-            scalar_freq=int(log_freq/2),
-            just_gif=True)
+            sw = utils.improc.Summ_writer(
+                writer=writer,
+                global_step=global_step,
+                log_freq=log_freq,
+                fps=2,
+                scalar_freq=int(log_freq/2),
+                just_gif=True)
 
-        try:
-            sample = next(iterloader)
-        except:
-            break
+            try:
+                sample = next(iterloader[i])
+            except:
+                global_step = 0
+                break
 
-        read_time = time.time() - read_start_time
-        iter_start_time = time.time()
+            read_time = time.time() - read_start_time
+            iter_start_time = time.time()
 
-        # run training iteration
-        run_model(dataloader, global_step-1, model, sample, img_dir, device, sw)
+            # run training iteration
+            if i == 0:
+                run_model(dataloader[i], global_step-1, model, sample, img_dir, device, sw, "val")
+            else:
+                run_model(dataloader[i], global_step-1, model, sample, img_dir, device, sw, "train")
 
-        iter_time = time.time() - iter_start_time
+            iter_time = time.time() - iter_start_time
 
-        print('%s; step %06d/%d; rtime %.2f; itime %.2f' % (
-            model_name, global_step, max_iters, read_time, iter_time))
+            print('%s; step %06d/%d; rtime %.2f; itime %.2f' % (
+                model_name, global_step, max_iters, read_time, iter_time))
 
-    writer.close()
+        writer.close()
 
 if __name__ == '__main__':
     Fire(main)

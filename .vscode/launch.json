@@ -1,0 +1,32 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "vis_rad",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/vis_nuscenes.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "args": [
+                "--batch_size", "1",
+                "--exp_name", "rad25",
+                "--dset", "mini",
+                "--data_dir", "./data",
+                "--img_dir", "vis/rad",
+                "--log_dir", "logs_nuscenes_bevseg",
+                "--init_dir", "checkpoints/8x5_5e-4_rad25_18:55:34",
+                "--use_radar", "True",
+                "--use_lidar", "False",
+                "--use_metaradar", "True",
+                "--use_radar_filters", "False",
+                "--nsweeps", "5",
+                "--res_scale", "2",
+                "--device_ids", "[0]"
+            ]
+        }
+    ]
+}
