@@ -1,2 +1,7 @@
 *~
 __pycache__
+data/
+logs_eval_nuscenes/
+logs_nuscenes_bevseg/
+vis/
+checkpoints/
